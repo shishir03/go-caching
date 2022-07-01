@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"hash/fnv"
 	"math"
 	"net"
 	"os"
@@ -12,24 +11,14 @@ import (
 	"time"
 )
 
-// import _ "github.com/pforpallav/cluster-server"
-
-const N uint32 = 5
-
 func Write(c net.Conn, msg string) {
 	c.Write([]byte(msg))
 }
 
-func Hash(s string) uint32 {
-	h := fnv.New32a()
-	h.Write([]byte(s))
-	return h.Sum32()
-}
-
 func main() {
 	arguments := os.Args
-	if len(arguments) == 1 {
-		fmt.Println("Please provide port number")
+	if len(arguments) < 3 {
+		fmt.Fprintln(os.Stderr, "Please provide port number")
 		return
 	}
 
@@ -48,30 +37,28 @@ func main() {
 		return
 	}
 
-	var mapCluster [N]*TTLMap
-	for i := 0; i < int(N); i++ {
-		mapCluster[i] = New(10)
-	}
-
+	m := New(10)
 	reader := bufio.NewReader(c)
 
 	for {
 		command, _ := reader.ReadString('\n')
-		args := strings.Split(command[:len(command)-1], " ")
+		args := strings.Split(command, " ")
+
+		if len(args) < 2 {
+			Write(c, "Not enough arguments\n")
+			continue
+		}
 
 		cmd := args[0]
+		keyName := args[1]
 		if strings.EqualFold(cmd, "q") || strings.EqualFold(cmd, "quit") {
 			os.Exit(0)
 		} else if strings.EqualFold(cmd, "SET") {
-			if len(args) < 2 {
-				Write(c, "Too few arguments\n")
-				continue
-			} else if len(args) > 3 {
+			if len(args) > 3 {
 				Write(c, "Too many arguments\n")
 				continue
 			}
 
-			keyName := args[1]
 			var value string
 			if len(args) == 2 {
 				value = ""
@@ -79,18 +66,9 @@ func main() {
 				value = args[2]
 			}
 
-			m := mapCluster[Hash(keyName)%N]
 			m.Put(keyName, value)
 			Write(c, "OK\n")
 		} else if strings.EqualFold(cmd, "GET") {
-			if len(args) != 2 {
-				Write(c, "Incorrect number of arguments\n")
-				continue
-			}
-
-			keyName := args[1]
-
-			m := mapCluster[Hash(keyName)%N]
 			v := m.Get(keyName)
 			if v != nil {
 				Write(c, *v+"\n")
@@ -103,7 +81,6 @@ func main() {
 				continue
 			}
 
-			keyName := args[1]
 			expTime, err := strconv.Atoi(args[2])
 			if err != nil {
 				Write(c, "Invalid argument\n")
@@ -111,7 +88,6 @@ func main() {
 			}
 
 			code := 1
-			m := mapCluster[Hash(keyName)%N]
 			ok := m.SetExpire(keyName, time.Now().Unix()+int64(expTime))
 			if !ok {
 				code = 0
@@ -119,13 +95,6 @@ func main() {
 
 			Write(c, "(integer) "+strconv.Itoa(code)+"\n")
 		} else if strings.EqualFold(cmd, "TTL") {
-			if len(args) != 2 {
-				Write(c, "Incorrect number of arguments\n")
-				continue
-			}
-
-			keyName := args[1]
-			m := mapCluster[Hash(keyName)%N]
 			if it, ok := m.m[keyName]; ok {
 				if it.exp == math.MaxInt64 {
 					Write(c, "-1\n")
@@ -140,13 +109,6 @@ func main() {
 				Write(c, "Key does not exist\n")
 			}
 		} else if strings.EqualFold(cmd, "DELETE") {
-			if len(args) != 2 {
-				Write(c, "Incorrect number of arguments\n")
-				continue
-			}
-
-			keyName := args[1]
-			m := mapCluster[Hash(keyName)%N]
 			if _, ok := m.m[keyName]; ok {
 				delete(m.m, keyName)
 				Write(c, "OK\n")
@@ -154,15 +116,11 @@ func main() {
 				Write(c, "Key not found\n")
 			}
 		} else if strings.EqualFold(cmd, "ADD") {
-			if len(args) < 2 {
-				Write(c, "Too few arguments\n")
-				continue
-			} else if len(args) > 3 {
+			if len(args) > 3 {
 				Write(c, "Too many arguments\n")
 				continue
 			}
 
-			keyName := args[1]
 			var value string
 			if len(args) == 2 {
 				value = ""
@@ -170,7 +128,6 @@ func main() {
 				value = args[2]
 			}
 
-			m := mapCluster[Hash(keyName)%N]
 			if _, ok := m.m[keyName]; ok {
 				Write(c, "Item already exists\n")
 				continue
