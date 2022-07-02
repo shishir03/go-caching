@@ -18,24 +18,36 @@ func (s serverNode) String() string {
 
 func main() {
 	arguments := os.Args
-	if len(arguments) < 3 {
-		fmt.Fprintln(os.Stderr, "Please provide host:port.")
+	if len(arguments) < 2 {
+		fmt.Fprintln(os.Stderr, "Please provide server node ports")
 		return
 	}
 
 	ch := ConsistentHash(len(arguments) - 2)
+	cmap := make(map[string]net.Conn)
 	for i := 2; i < len(arguments); i++ {
-		ch.Add(serverNode{port: arguments[i]})
+		port := arguments[i]
+		ch.Add(serverNode{port: port})
+		CONNECT := "localhost:" + port
+		c, err := net.Dial("tcp", CONNECT)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		cmap[port] = c
 	}
 
 	for {
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print(">> ")
-		text, _ := reader.ReadString('\n')
-		cmd := text[:len(text)-1]
-
 		command, _ := reader.ReadString('\n')
-		args := strings.Split(command, " ")
+		args := strings.Split(command[:len(command)-1], " ")
+		if strings.EqualFold(command, "q\n") || strings.EqualFold(command, "quit\n") {
+			fmt.Println("TCP client exiting...")
+			return
+		}
+
 		if len(args) < 2 {
 			fmt.Fprintln(os.Stderr, "Not enough arguments")
 			continue
@@ -43,22 +55,11 @@ func main() {
 
 		keyName := args[1]
 		node := ch.LocateKey([]byte(keyName)).String()
-		CONNECT := "localhost:" + node
-		c, err := net.Dial("tcp", CONNECT)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
+		c := cmap[node]
 
-		fmt.Fprintf(c, text)
+		fmt.Fprintf(c, command+"\n")
 
 		message, _ := bufio.NewReader(c).ReadString('\n')
 		fmt.Print("->: " + message)
-		if strings.EqualFold(cmd, "q") || strings.EqualFold(cmd, "quit") {
-			fmt.Println("TCP client exiting...")
-			return
-		}
-
-		c.Close()
 	}
 }

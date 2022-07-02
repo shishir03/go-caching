@@ -15,14 +15,17 @@ func Write(c net.Conn, msg string) {
 	c.Write([]byte(msg))
 }
 
+var m *TTLMap
+var PORT string
+
 func main() {
 	arguments := os.Args
-	if len(arguments) < 3 {
+	if len(arguments) < 2 {
 		fmt.Fprintln(os.Stderr, "Please provide port number")
 		return
 	}
 
-	PORT := ":" + arguments[1]
+	PORT = ":" + arguments[1]
 	l, err := net.Listen("tcp", PORT)
 	if err != nil {
 		fmt.Println(err)
@@ -37,23 +40,29 @@ func main() {
 		return
 	}
 
-	m := New(10)
+	m = New(10)
 	reader := bufio.NewReader(c)
 
 	for {
 		command, _ := reader.ReadString('\n')
-		args := strings.Split(command, " ")
+		if len(command) == 0 {
+			continue
+		}
+
+		args := strings.Split(command[:len(command)-1], " ")
+		cmd := args[0]
+		if len(args) == 0 {
+			Write(c, "Please type something")
+			continue
+		}
 
 		if len(args) < 2 {
 			Write(c, "Not enough arguments\n")
 			continue
 		}
 
-		cmd := args[0]
 		keyName := args[1]
-		if strings.EqualFold(cmd, "q") || strings.EqualFold(cmd, "quit") {
-			os.Exit(0)
-		} else if strings.EqualFold(cmd, "SET") {
+		if strings.EqualFold(cmd, "SET") {
 			if len(args) > 3 {
 				Write(c, "Too many arguments\n")
 				continue
