@@ -59,7 +59,13 @@ func main() {
 
 		fmt.Fprintf(c, command+"\n")
 
-		message, _ := bufio.NewReader(c).ReadString('\n')
+		message, err := bufio.NewReader(c).ReadString('\n')
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Server down")
+			ch.Remove(node)
+			continue
+		}
+
 		fmt.Print("->: " + message)
 	}
 }
