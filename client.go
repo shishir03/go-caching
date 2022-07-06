@@ -42,8 +42,9 @@ func main() {
 		reader := bufio.NewReader(os.Stdin)
 		fmt.Print(">> ")
 		command, _ := reader.ReadString('\n')
-		args := strings.Split(command[:len(command)-1], " ")
-		if strings.EqualFold(command, "q\n") || strings.EqualFold(command, "quit\n") {
+		command = command[:len(command)-1]
+		args := strings.Split(command, " ")
+		if strings.EqualFold(command, "q") || strings.EqualFold(command, "quit") {
 			fmt.Println("TCP client exiting...")
 			return
 		}
@@ -57,7 +58,7 @@ func main() {
 		node := ch.LocateKey([]byte(keyName)).String()
 		c := cmap[node]
 
-		fmt.Fprintf(c, command+"\n")
+		fmt.Fprintln(c, command)
 
 		message, err := bufio.NewReader(c).ReadString('\n')
 		if err != nil {
